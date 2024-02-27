@@ -1,6 +1,6 @@
 import torch
 
-from facexlib.utils import load_file_from_url
+from FACEXLIB.facexlib.utils import load_file_from_url
 from .arcface_arch import Backbone
 
 

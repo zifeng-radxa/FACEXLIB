@@ -1,6 +1,6 @@
 import torch
 
-from facexlib.utils import load_file_from_url
+from FACEXLIB.facexlib.utils import load_file_from_url
 from .awing_arch import FAN
 from .convert_98_to_68_landmarks import landmark_98_to_68
 

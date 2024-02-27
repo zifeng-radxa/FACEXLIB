@@ -6,12 +6,11 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision.models._utils import IntermediateLayerGetter as IntermediateLayerGetter
 
-from facexlib.detection.align_trans import get_reference_facial_points, warp_and_crop_face
-from facexlib.detection.retinaface_net import FPN, SSH, MobileNetV1, make_bbox_head, make_class_head, make_landmark_head
-from facexlib.detection.retinaface_utils import (PriorBox, batched_decode, batched_decode_landm, decode, decode_landm,
+from FACEXLIB.facexlib.detection.align_trans import get_reference_facial_points, warp_and_crop_face
+from FACEXLIB.facexlib.detection.retinaface_net import FPN, SSH, MobileNetV1, make_bbox_head, make_class_head, make_landmark_head
+from FACEXLIB.facexlib.detection.retinaface_utils import (PriorBox, batched_decode, batched_decode_landm, decode, decode_landm,
                                                  py_cpu_nms)
-
-
+from tools.tpu_utils import load_model
 def generate_config(network_name):
 
     cfg_mnet = {
@@ -68,79 +67,79 @@ def generate_config(network_name):
         raise NotImplementedError(f'network_name={network_name}')
 
 
-class RetinaFace(nn.Module):
-
-    def __init__(self, network_name='resnet50', half=False, phase='test', device=None):
+class RetinaFace():
+    def __init__(self, network_name='resnet50', half=False, phase='test', device=None, face_bmodel=None):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
-
-        super(RetinaFace, self).__init__()
-        self.half_inference = half
+        #
+        # super(RetinaFace, self).__init__()
+        self.half_inference = False
         cfg = generate_config(network_name)
         self.backbone = cfg['name']
-
-        self.model_name = f'retinaface_{network_name}'
+        #
+        # self.model_name = f'retinaface_{network_name}'
         self.cfg = cfg
-        self.phase = phase
+        # self.phase = phase
         self.target_size, self.max_size = 1600, 2150
-        self.resize, self.scale, self.scale1 = 1., None, None
+        # self.resize, self.scale, self.scale1 = 1., None, None
         self.mean_tensor = torch.tensor([[[[104.]], [[117.]], [[123.]]]], device=self.device)
-        self.reference = get_reference_facial_points(default_square=True)
-        # Build network.
-        backbone = None
-        if cfg['name'] == 'mobilenet0.25':
-            backbone = MobileNetV1()
-            self.body = IntermediateLayerGetter(backbone, cfg['return_layers'])
-        elif cfg['name'] == 'Resnet50':
-            import torchvision.models as models
-            backbone = models.resnet50(pretrained=False)
-            self.body = IntermediateLayerGetter(backbone, cfg['return_layers'])
+        # self.reference = get_reference_facial_points(default_square=True)
+        # # Build network.
+        # backbone = None
+        # if cfg['name'] == 'mobilenet0.25':
+        #     backbone = MobileNetV1()
+        #     self.body = IntermediateLayerGetter(backbone, cfg['return_layers'])
+        # elif cfg['name'] == 'Resnet50':
+        #     import torchvision.models as models
+        #     backbone = models.resnet50(pretrained=False)
+        #     self.body = IntermediateLayerGetter(backbone, cfg['return_layers'])
+        #
+        # in_channels_stage2 = cfg['in_channel']
+        # in_channels_list = [
+        #     in_channels_stage2 * 2,
+        #     in_channels_stage2 * 4,
+        #     in_channels_stage2 * 8,
+        # ]
+        #
+        # out_channels = cfg['out_channel']
+        # self.fpn = FPN(in_channels_list, out_channels)
+        # self.ssh1 = SSH(out_channels, out_channels)
+        # self.ssh2 = SSH(out_channels, out_channels)
+        # self.ssh3 = SSH(out_channels, out_channels)
+        #
+        # self.ClassHead = make_class_head(fpn_num=3, inchannels=cfg['out_channel'])
+        # self.BboxHead = make_bbox_head(fpn_num=3, inchannels=cfg['out_channel'])
+        # self.LandmarkHead = make_landmark_head(fpn_num=3, inchannels=cfg['out_channel'])
+        #
+        # self.to(self.device)
+        # self.eval()
+        # if self.half_inference:
+        #     self.half()
+        self.face_bmodel = face_bmodel
 
-        in_channels_stage2 = cfg['in_channel']
-        in_channels_list = [
-            in_channels_stage2 * 2,
-            in_channels_stage2 * 4,
-            in_channels_stage2 * 8,
-        ]
-
-        out_channels = cfg['out_channel']
-        self.fpn = FPN(in_channels_list, out_channels)
-        self.ssh1 = SSH(out_channels, out_channels)
-        self.ssh2 = SSH(out_channels, out_channels)
-        self.ssh3 = SSH(out_channels, out_channels)
-
-        self.ClassHead = make_class_head(fpn_num=3, inchannels=cfg['out_channel'])
-        self.BboxHead = make_bbox_head(fpn_num=3, inchannels=cfg['out_channel'])
-        self.LandmarkHead = make_landmark_head(fpn_num=3, inchannels=cfg['out_channel'])
-
-        self.to(self.device)
-        self.eval()
-        if self.half_inference:
-            self.half()
-
-    def forward(self, inputs):
-        out = self.body(inputs)
-
-        if self.backbone == 'mobilenet0.25' or self.backbone == 'Resnet50':
-            out = list(out.values())
-        # FPN
-        fpn = self.fpn(out)
-
-        # SSH
-        feature1 = self.ssh1(fpn[0])
-        feature2 = self.ssh2(fpn[1])
-        feature3 = self.ssh3(fpn[2])
-        features = [feature1, feature2, feature3]
-
-        bbox_regressions = torch.cat([self.BboxHead[i](feature) for i, feature in enumerate(features)], dim=1)
-        classifications = torch.cat([self.ClassHead[i](feature) for i, feature in enumerate(features)], dim=1)
-        tmp = [self.LandmarkHead[i](feature) for i, feature in enumerate(features)]
-        ldm_regressions = (torch.cat(tmp, dim=1))
-
-        if self.phase == 'train':
-            output = (bbox_regressions, classifications, ldm_regressions)
-        else:
-            output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)
-        return output
+    # def forward(self, inputs):
+    #     out = self.body(inputs)
+    #
+    #     if self.backbone == 'mobilenet0.25' or self.backbone == 'Resnet50':
+    #         out = list(out.values())
+    #     # FPN
+    #     fpn = self.fpn(out)
+    #
+    #     # SSH
+    #     feature1 = self.ssh1(fpn[0])
+    #     feature2 = self.ssh2(fpn[1])
+    #     feature3 = self.ssh3(fpn[2])
+    #     features = [feature1, feature2, feature3]
+    #
+    #     bbox_regressions = torch.cat([self.BboxHead[i](feature) for i, feature in enumerate(features)], dim=1)
+    #     classifications = torch.cat([self.ClassHead[i](feature) for i, feature in enumerate(features)], dim=1)
+    #     tmp = [self.LandmarkHead[i](feature) for i, feature in enumerate(features)]
+    #     ldm_regressions = (torch.cat(tmp, dim=1))
+    #
+    #     if self.phase == 'train':
+    #         output = (bbox_regressions, classifications, ldm_regressions)
+    #     else:
+    #         output = (bbox_regressions, F.softmax(classifications, dim=-1), ldm_regressions)
+    #     return output
 
     def __detect_faces(self, inputs):
         # get scale
@@ -150,10 +149,15 @@ class RetinaFace(nn.Module):
         self.scale1 = torch.tensor(tmp, dtype=torch.float32, device=self.device)
 
         # forawrd
-        inputs = inputs.to(self.device)
+        # inputs = inputs.to(self.device)
         if self.half_inference:
             inputs = inputs.half()
-        loc, conf, landmarks = self(inputs)
+        # loc, conf, landmarks = self(inputs)
+        inputs = inputs.numpy()
+        print(inputs.shape)
+        print(type(inputs))
+        print(self.face_bmodel([inputs])[0].shape)
+        loc, conf, landmarks = self.face_bmodel([inputs])
 
         # get priorbox
         priorbox = PriorBox(self.cfg, image_size=inputs.shape[2:])
@@ -197,13 +201,15 @@ class RetinaFace(nn.Module):
         use_origin_size=True,
     ):
         image, self.resize = self.transform(image, use_origin_size)
-        image = image.to(self.device)
+        image = image.to('cpu')
         if self.half_inference:
             image = image.half()
         image = image - self.mean_tensor
 
         loc, conf, landmarks, priors = self.__detect_faces(image)
-
+        loc = torch.from_numpy(loc)
+        conf = torch.from_numpy(conf)
+        landmarks = torch.from_numpy(landmarks)
         boxes = decode(loc.data.squeeze(0), priors.data, self.cfg['variance'])
         boxes = boxes * self.scale / self.resize
         boxes = boxes.cpu().numpy()

@@ -4,10 +4,9 @@ import os
 import torch
 from torchvision.transforms.functional import normalize
 
-from facexlib.detection import init_detection_model
-from facexlib.parsing import init_parsing_model
-from facexlib.utils.misc import img2tensor, imwrite
-
+from FACEXLIB.facexlib.detection import init_detection_model
+# from FACEXLIB.facexlib.parsing import init_parsing_model
+from FACEXLIB.facexlib.utils.misc import img2tensor, imwrite
 
 def get_largest_face(det_faces, h, w):
 
@@ -45,6 +44,9 @@ def get_center_face(det_faces, h=0, w=0, center=None):
     return det_faces[center_idx], center_idx
 
 
+
+
+
 class FaceRestoreHelper(object):
     """Helper for the face restoration pipeline (base class)."""
 
@@ -58,7 +60,9 @@ class FaceRestoreHelper(object):
                  pad_blur=False,
                  use_parse=False,
                  device=None,
-                 model_rootpath=None):
+                 model_rootpath=None,
+                 face_bmodel = None,
+                 pars_bmodel = None):
         self.template_3points = template_3points  # improve robustness
         self.upscale_factor = upscale_factor
         # the cropped face ratio based on the square face
@@ -96,11 +100,11 @@ class FaceRestoreHelper(object):
             self.device = device
 
         # init face detection model
-        self.face_det = init_detection_model(det_model, half=False, device=self.device, model_rootpath=model_rootpath)
+        self.face_det = init_detection_model(det_model, half=False, device=self.device, model_rootpath=model_rootpath, face_bmodel=face_bmodel)
 
         # init face parsing model
         self.use_parse = use_parse
-        self.face_parse = init_parsing_model(model_name='parsenet', device=self.device, model_rootpath=model_rootpath)
+        self.face_parse = pars_bmodel
 
     def set_upscale_factor(self, upscale_factor):
         self.upscale_factor = upscale_factor
@@ -305,8 +309,10 @@ class FaceRestoreHelper(object):
                 face_input = img2tensor(face_input.astype('float32') / 255., bgr2rgb=True, float32=True)
                 normalize(face_input, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
                 face_input = torch.unsqueeze(face_input, 0).to(self.device)
-                with torch.no_grad():
-                    out = self.face_parse(face_input)[0]
+                # with torch.no_grad():
+                face_input = face_input.numpy()
+                out = self.face_parse([face_input])[0]
+                out = torch.from_numpy(out)
                 out = out.argmax(dim=1).squeeze().cpu().numpy()
 
                 mask = np.zeros(out.shape)
