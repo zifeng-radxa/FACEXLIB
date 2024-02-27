@@ -1,5 +1,5 @@
-import torch
-from copy import deepcopy
+# import torch
+# from copy import deepcopy
 
 # from facexlib.utils import load_file_from_url
 from .retinaface import RetinaFace
