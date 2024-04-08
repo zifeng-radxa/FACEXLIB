@@ -306,7 +306,7 @@ class FaceRestoreHelper(object):
             inv_restored = cv2.warpAffine(restored_face, inverse_affine, (w_up, h_up))
 
             if self.use_parse:
-                print("!!!")
+                # print("!!!")
                 # inference
                 face_input = cv2.resize(restored_face, (512, 512), interpolation=cv2.INTER_LINEAR)
                 face_input = img2tensor(face_input.astype('float32') / 255., bgr2rgb=True, float32=True)
@@ -318,7 +318,7 @@ class FaceRestoreHelper(object):
                 out = self.face_parse([face_input])[0]
                 out = torch.from_numpy(out)
                 out = out.argmax(dim=1).squeeze().cpu().numpy()
-                print("pares time {}".format((time.time() - time0) * 1000))
+                # print("pares time {}".format((time.time() - time0) * 1000))
 
                 mask = np.zeros(out.shape)
                 MASK_COLORMAP = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 0, 0, 0]

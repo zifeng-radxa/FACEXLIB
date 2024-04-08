@@ -154,9 +154,9 @@ class RetinaFace():
             inputs = inputs.half()
         # loc, conf, landmarks = self(inputs)
         inputs = inputs.numpy()
-        print(inputs.shape)
-        print(type(inputs))
-        print(self.face_bmodel([inputs])[0].shape)
+        # print(inputs.shape)
+        # print(type(inputs))
+        # print(self.face_bmodel([inputs])[0].shape)
         loc, conf, landmarks = self.face_bmodel([inputs])
 
         # get priorbox
