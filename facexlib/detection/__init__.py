@@ -3,7 +3,6 @@
 
 # from facexlib.utils import load_file_from_url
 from .retinaface import RetinaFace
-from tools.tpu_utils import load_model
 
 def init_detection_model(model_name, half=False, device='cuda', model_rootpath=None, face_bmodel=None):
     if model_name == 'retinaface_resnet50':

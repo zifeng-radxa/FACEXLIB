@@ -1,5 +1,4 @@
 import time
-
 import cv2
 import numpy as np
 import os
@@ -7,7 +6,6 @@ import torch
 from torchvision.transforms.functional import normalize
 
 from FACEXLIB.facexlib.detection import init_detection_model
-# from FACEXLIB.facexlib.parsing import init_parsing_model
 from FACEXLIB.facexlib.utils.misc import img2tensor, imwrite
 
 def get_largest_face(det_faces, h, w):

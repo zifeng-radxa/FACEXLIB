@@ -10,7 +10,6 @@ from FACEXLIB.facexlib.detection.align_trans import get_reference_facial_points,
 from FACEXLIB.facexlib.detection.retinaface_net import FPN, SSH, MobileNetV1, make_bbox_head, make_class_head, make_landmark_head
 from FACEXLIB.facexlib.detection.retinaface_utils import (PriorBox, batched_decode, batched_decode_landm, decode, decode_landm,
                                                  py_cpu_nms)
-from tools.tpu_utils import load_model
 def generate_config(network_name):
 
     cfg_mnet = {
